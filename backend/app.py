@@ -47,7 +47,7 @@ def clean_text(text: str) -> str:
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
+def chunk_text(text: str, chunk_size: int = 500) -> list[str]:
     if not text:
         return []
     
@@ -62,23 +62,32 @@ def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]
         # Initial end point
         end = start + chunk_size
         
-        # If we are not at the end of the string
+        # If we are not at the end of the string, look for a sentence break
         if end < text_len:
-            # Look for the last space within the chunk to avoid breaking words
-            last_space = text.rfind(' ', start, end)
-            if last_space != -1 and last_space > start:
-                end = last_space
+            # Look for the last sentence-ending punctuation within the chunk
+            # Looking at a slightly wider range to find a good break point
+            search_range = text[max(start, end - 150):end + 50]
+            last_break = -1
+            for punct in ['. ', '! ', '? ', '\n']:
+                idx = search_range.rfind(punct)
+                if idx > last_break:
+                    last_break = idx
+            
+            if last_break != -1:
+                # Adjust 'end' to the punctuation + space
+                end = max(start, end - 150) + last_break + 1
+            else:
+                # Fallback to last space if no punctuation found
+                last_space = text.rfind(' ', start, end)
+                if last_space != -1 and last_space > start:
+                    end = last_space
         
         chunk = text[start:end].strip()
         if len(chunk) > 30: # Only add substantial chunks
             chunks.append(chunk)
         
-        # Move start forward, but subtract overlap
-        start = end - overlap
-        
-        # Ensure progress
-        if start >= end:
-            start = end
+        # Move start forward to the end of the current chunk (no overlap)
+        start = end
             
     # Deduplicate in case overlapping caused exact same chunks
     return list(dict.fromkeys(chunks))
@@ -174,9 +183,9 @@ async def scrape(req: ScrapeRequest):
                 continue
                 
             if line.lower() not in seen:
-                # If a block is too long, split it
+                # If a block is too long, split it into smaller, manageable chunks
                 if len(line) > 500:
-                    sub_chunks = chunk_text(line, chunk_size=450, overlap=50)
+                    sub_chunks = chunk_text(line, chunk_size=450)
                     for sc in sub_chunks:
                         if sc.lower() not in seen:
                             unique_blocks.append(sc)
