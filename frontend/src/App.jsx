@@ -505,7 +505,9 @@ function App() {
                         className={`extracted-chunk ${isHighlighted ? "highlighted-chunk" : ""}`}
                       >
                         <span className="chunk-index">{i + 1}</span>
-                        {isHighlighted ? renderText(p, exactQuote) : p}
+                        <div className="chunk-text">
+                          {isHighlighted ? renderText(p, exactQuote) : p}
+                        </div>
                       </div>
                     );
                   })}

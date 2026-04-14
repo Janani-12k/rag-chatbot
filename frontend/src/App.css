@@ -384,7 +384,9 @@ body, html {
   line-height: 1.8;
   color: #e2e8f0;
   transition: all 0.2s ease-in-out;
-  position: relative;
+  display: flex; /* Use flexbox for perfect alignment */
+  align-items: flex-start;
+  gap: 12px;
   margin-bottom: 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   word-wrap: break-word;
@@ -410,16 +412,13 @@ body, html {
   border-radius: 6px;
   font-size: 0.75rem;
   font-weight: 700;
-  margin-right: 12px;
-  margin-bottom: 8px;
-  float: left;
   box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+  flex-shrink: 0; /* Don't allow index to shrink */
+  margin-top: 2px; /* Slight adjustment to align with first line of text */
 }
 
-.extracted-chunk::after {
-  content: "";
-  display: table;
-  clear: both;
+.chunk-text {
+  flex: 1; /* Take up remaining space */
 }
 
 .extracted-chunk.highlighted-chunk {
