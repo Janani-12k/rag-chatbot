@@ -299,7 +299,7 @@ function App() {
             <Globe size={48} color="#60a5fa" />
           </div>
           <h2>{isLoginMode ? "Sign In" : "Sign Up"}</h2>
-          <p className="auth-subtitle">{isLoginMode ? "Login to start exploring research" : "Create your account to start exploring research"}</p>
+          <p className="auth-subtitle">{isLoginMode ? "Login to access your web research and extraction tools" : "Join WebScraperX to start extracting insights from the web"}</p>
           
           {authError && <div className="auth-error-msg">{authError}</div>}
 
