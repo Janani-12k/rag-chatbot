@@ -209,7 +209,8 @@ function App() {
           text: data.answer,
           title: data.title,
           url: url,
-          sources: data.sources
+          sources: data.sources,
+          exact_quote: data.exact_quote
         }]);
         
         if (data.sources) {
@@ -257,7 +258,7 @@ function App() {
     setUrl(chat.url);
     setMessages([
       { type: "user", text: chat.question },
-      { type: "bot", text: chat.answer, title: chat.title, url: chat.url, sources: chat.sources }
+      { type: "bot", text: chat.answer, title: chat.title, url: chat.url, sources: chat.sources, exact_quote: chat.exact_quote }
     ]);
     
     setChunks([]); // clear old chunks while loading new ones
@@ -294,6 +295,19 @@ function App() {
     setPageTitle("");
     setHighlightedChunks([]);
     setExactQuote("");
+  };
+
+  // Helper to render text with specific yellow highlight
+  const renderText = (text, quote) => {
+    if (!quote || !text || text.indexOf(quote) === -1) return text;
+    const parts = text.split(quote);
+    return (
+      <>
+        {parts[0]}
+        <span className="exact-highlight">{quote}</span>
+        {parts.slice(1).join(quote)}
+      </>
+    );
   };
 
   const handleDeleteChat = async (e, chatId) => {
@@ -477,7 +491,9 @@ function App() {
                     key={index}
                     className={msg.type === "user" ? "user-msg" : "bot-msg"}
                   >
-                    <div className="msg-text">{msg.text}</div>
+                    <div className="msg-text">
+                      {msg.type === "bot" ? renderText(msg.text, msg.exact_quote) : msg.text}
+                    </div>
                     {msg.type === "bot" && msg.url && (
                       <div className="msg-source">
                         <span className="source-label">Source:</span>
@@ -527,19 +543,6 @@ function App() {
                   {chunks.map((p, i) => {
                     const isHighlighted = highlightedChunks.includes(p);
                     
-                    // Helper to render text with specific yellow highlight
-                    const renderText = (text, quote) => {
-                      if (!quote || text.indexOf(quote) === -1) return text;
-                      const parts = text.split(quote);
-                      return (
-                        <>
-                          {parts[0]}
-                          <span className="exact-highlight">{quote}</span>
-                          {parts.slice(1).join(quote)}
-                        </>
-                      );
-                    };
-
                     return (
                       <div 
                         key={i} 
