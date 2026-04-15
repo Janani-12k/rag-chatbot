@@ -151,18 +151,39 @@ async def scrape(req: ScrapeRequest):
         print(f"DEBUG: Scraping {url}...")
         
         # Using cloudscraper to bypass bot protection
-        scraper = cloudscraper.create_scraper()
+        scraper = cloudscraper.create_scraper(
+            browser={
+                'browser': 'chrome',
+                'platform': 'windows',
+                'desktop': True
+            }
+        )
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
+        }
+
         try:
-            response = scraper.get(url, timeout=10)
+            response = scraper.get(url, timeout=15, headers=headers)
         except Exception as e:
             print(f"DEBUG: Cloudscraper failed, trying standard requests: {e}")
             # Add protocol if missing
             if not url.startswith(('http://', 'https://')):
                 url = 'https://' + url
-            response = requests.get(url, timeout=10, verify=False)
+            try:
+                response = requests.get(url, timeout=15, verify=False, headers=headers)
+            except Exception as req_e:
+                print(f"DEBUG: Standard requests also failed: {req_e}")
+                return {"error": f"Failed to connect to the website: {str(req_e)}"}
             
-        if not response or not response.text:
-            return {"error": "Could not retrieve any content from this URL."}
+        if not response or not response.text or response.status_code != 200:
+            status = response.status_code if response else "No Response"
+            return {"error": f"Could not retrieve content. Website returned status: {status}. Some sites block automated access."}
 
         soup = BeautifulSoup(response.text, "html.parser")
 
