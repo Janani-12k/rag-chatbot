@@ -178,35 +178,53 @@ async def scrape(req: ScrapeRequest):
         for noise in soup(["script", "style", "nav", "footer", "header", "aside", "form", "button", "svg", "path", "iframe"]):
             noise.decompose()
 
-        # Get all text from body with newline separator to preserve paragraph breaks
-        body_text = soup.body.get_text(separator='\n', strip=True)
+        # Extract content from natural block-level elements
+        raw_blocks = []
+        for tag in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'article', 'section']):
+            text = clean_text(tag.get_text(strip=True))
+            if len(text) > 50: # Increased minimum threshold to filter out noise
+                raw_blocks.append(text)
         
-        # Split into potential paragraphs by newlines
-        lines = [clean_text(line) for line in body_text.split('\n')]
-        
-        # Filter and process lines
-        unique_blocks = []
+        # Deduplicate while preserving order
+        unique_raw = []
         seen = set()
-        for line in lines:
-            if len(line) < 30: # Skip very short snippets
-                continue
-                
-            if line.lower() not in seen:
-                # If a block is too long, split it into smaller, manageable chunks
-                if len(line) > 500:
-                    sub_chunks = chunk_text(line, chunk_size=450)
-                    for sc in sub_chunks:
-                        if sc.lower() not in seen:
-                            unique_blocks.append(sc)
-                            seen.add(sc.lower())
-                else:
-                    unique_blocks.append(line)
-                    seen.add(line.lower())
+        for b in raw_blocks:
+            if b.lower() not in seen:
+                unique_raw.append(b)
+                seen.add(b.lower())
 
-        # Final cleanup and limit to 50 chunks
-        paragraphs = unique_blocks[:50]
+        # Professional Grouping Logic: Merge small consecutive blocks
+        # This keeps headings with their paragraphs and lists together in one card.
+        professional_chunks = []
+        current_group = ""
         
-        print(f"DEBUG: Extracted {len(paragraphs)} chunks from {url}")
+        for block in unique_raw:
+            # If current group is empty, start it
+            if not current_group:
+                current_group = block
+            # If adding this block doesn't exceed a reasonable card size (700 chars), merge it
+            elif len(current_group) + len(block) < 700:
+                current_group += "\n\n" + block
+            # Otherwise, save the current group and start a new one
+            else:
+                # If the group is long enough, split it properly at sentence boundaries
+                if len(current_group) > 800:
+                    professional_chunks.extend(chunk_text(current_group, chunk_size=600))
+                else:
+                    professional_chunks.append(current_group)
+                current_group = block
+        
+        # Add the last group
+        if current_group:
+            if len(current_group) > 800:
+                professional_chunks.extend(chunk_text(current_group, chunk_size=600))
+            else:
+                professional_chunks.append(current_group)
+
+        # Final cleanup and limit to top 25 high-quality chunks
+        paragraphs = [p.replace('\n\n', ' ') for p in professional_chunks if len(p) > 60][:25]
+        
+        print(f"DEBUG: Extracted {len(paragraphs)} high-quality professional chunks from {url}")
         
         # Keep semantic paragraphs for AI (global store)
         url_data_cache[url] = {
