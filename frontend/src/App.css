@@ -376,28 +376,31 @@ body, html {
 }
 
 .extracted-chunk {
-  padding: 20px;
-  background: #1e293b; /* Slightly darker background for better text contrast */
+  padding: 18px;
+  background: #1e293b;
   border-radius: 12px;
   border: 1px solid #334155;
-  font-size: 0.95rem; /* Slightly larger text */
-  line-height: 1.7;
-  color: #f1f5f9; /* Sharper text color */
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #f1f5f9;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: flex-start;
-  gap: 16px; /* More gap between index and text */
-  margin-bottom: 20px; /* More margin between cards */
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  gap: 12px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   word-wrap: break-word;
   overflow-wrap: break-word;
-  text-align: justify; /* Justify text for a "proper" look */
+  word-break: break-word; /* Ensure long words break */
+  text-align: left; /* Changed from justify to left for better spacing reliability */
+  box-sizing: border-box; /* Ensure padding doesn't break width */
+  overflow: hidden; /* Contain everything */
 }
 
 .extracted-chunk:hover {
   border-color: #3b82f6;
   background: #243146;
-  transform: scale(1.02); /* Subtle scale effect */
+  transform: translateY(-2px); /* Scale can sometimes cause overlap issues */
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
 }
 
@@ -405,20 +408,21 @@ body, html {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  height: 28px;
+  min-width: 26px;
+  height: 26px;
   background: #3b82f6;
   color: white;
-  border-radius: 8px;
-  font-size: 0.85rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
   font-weight: 800;
-  box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
   flex-shrink: 0;
   margin-top: 2px;
 }
 
 .chunk-text {
   flex: 1;
+  min-width: 0; /* Critical for preventing flexbox overflow */
   letter-spacing: 0.01em;
 }
 
