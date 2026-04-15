@@ -158,7 +158,7 @@ function App() {
     setHighlightedChunks([]);
     setExactQuote("");
     try {
-      const res = await fetch("http://127.0.0.1:5000/scrape", { 
+      const res = await fetch("https://webscraperx-backend.onrender.com/scrape", { 
         method: "POST", 
         headers: { "Content-Type": "application/json" }, 
         body: JSON.stringify({ url }), 
@@ -190,7 +190,7 @@ function App() {
     setChatLoading(true);
 
     try {
-      const res = await fetch("http://127.0.0.1:5000/ask", {
+      const res = await fetch("https://webscraperx-backend.onrender.com/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -262,7 +262,7 @@ function App() {
       setHistoryLoading(true);
       // Re-fetch the content silently in the background
       try {
-        const res = await fetch("http://127.0.0.1:5000/scrape", { 
+        const res = await fetch("https://webscraperx-backend.onrender.com/scrape", { 
           method: "POST", 
           headers: { "Content-Type": "application/json" }, 
           body: JSON.stringify({ url: chat.url }), 
