@@ -494,14 +494,6 @@ function App() {
                     <div className="msg-text">
                       {msg.type === "bot" ? renderText(msg.text, msg.exact_quote) : msg.text}
                     </div>
-                    {msg.type === "bot" && msg.url && (
-                      <div className="msg-source">
-                        <span className="source-label">Source:</span>
-                        <a href={msg.url} target="_blank" rel="noopener noreferrer" className="source-link">
-                          {msg.title || msg.url}
-                        </a>
-                      </div>
-                    )}
                   </div>
                 ))}
                 {chatLoading && (
