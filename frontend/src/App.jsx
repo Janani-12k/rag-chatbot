@@ -17,9 +17,11 @@ function App() {
   const [url, setUrl] = useState(""); 
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [chunks, setChunks] = useState([]);
+  const [pageTitle, setPageTitle] = useState("");
   const [highlightedChunks, setHighlightedChunks] = useState([]);
   const [exactQuote, setExactQuote] = useState("");
   const [toast, setToast] = useState({ show: false, message: "", type: "" });
@@ -151,8 +153,10 @@ function App() {
       return;
     }
     setLoading(true);
+    setLoadingMessage("Scraping pages...");
     setMessages([]);
     setChunks([]);
+    setPageTitle("");
     setHighlightedChunks([]);
     setExactQuote("");
     try {
@@ -164,7 +168,8 @@ function App() {
       const data = await res.json(); 
       if (data.paragraphs && data.paragraphs.length > 0) {
         setChunks(data.paragraphs);
-        setMessages([{ type: "bot", text: "Knowledge extracted! What would you like to know about this site?" }]);
+        setPageTitle(data.title || "Extracted Content");
+        setMessages([{ type: "bot", text: "Knowledge extracted! What would you like to know about this site?", title: data.title, url }]);
       } else if (data.paragraphs && data.paragraphs.length === 0) {
         setMessages([{ type: "bot", text: "I couldn't find much text on this page. Try a different URL or one with more content." }]);
       } else if (data.error) {
@@ -174,6 +179,7 @@ function App() {
       showToast("Error connecting to server.");
     } finally {
       setLoading(false);
+      setLoadingMessage("");
     }
   }; 
 
@@ -198,7 +204,13 @@ function App() {
       const data = await res.json();
 
       if (data.answer) {
-        setMessages(prev => [...prev, { type: "bot", text: data.answer }]);
+        setMessages(prev => [...prev, { 
+          type: "bot", 
+          text: data.answer,
+          title: data.title,
+          url: url,
+          sources: data.sources
+        }]);
         
         if (data.sources) {
           setHighlightedChunks(data.sources);
@@ -219,6 +231,7 @@ function App() {
             url,
             question: userQ,
             answer: data.answer,
+            title: data.title || "",
             sources: data.sources || [],
             exact_quote: data.exact_quote || "",
             timestamp: new Date()
@@ -244,10 +257,11 @@ function App() {
     setUrl(chat.url);
     setMessages([
       { type: "user", text: chat.question },
-      { type: "bot", text: chat.answer }
+      { type: "bot", text: chat.answer, title: chat.title, url: chat.url, sources: chat.sources }
     ]);
     
     setChunks([]); // clear old chunks while loading new ones
+    setPageTitle(chat.title || "");
     setHighlightedChunks(chat.sources || []);
     setExactQuote(chat.exact_quote || "");
     if (chat.url) {
@@ -262,6 +276,7 @@ function App() {
         const data = await res.json(); 
         if (data.paragraphs) {
           setChunks(data.paragraphs);
+          setPageTitle(data.title || chat.title || "Extracted Content");
         }
       } catch (err) {
         console.error("Could not fetch chunks for history item", err);
@@ -276,6 +291,7 @@ function App() {
     setQuestion("");
     setMessages([]);
     setChunks([]);
+    setPageTitle("");
     setHighlightedChunks([]);
     setExactQuote("");
   };
@@ -368,9 +384,12 @@ function App() {
       {/* Sidebar */}
       <div className="sidebar">
         <div className="sidebar-header">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '10px' }}>
-            <Globe size={28} color="#60a5fa" />
-            <h2 style={{ margin: 0 }}>WebScraperX</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+              <Globe size={28} color="#60a5fa" />
+              <h2 style={{ margin: 0 }}>WebScraperX</h2>
+            </div>
+            <p className="branding-subtitle">AI Website Knowledge Assistant</p>
           </div>
           <div className="user-info">
              <img src={user.photoURL || `https://ui-avatars.com/api/?name=${user.email}&background=random`} alt={user.displayName || user.email} />
@@ -425,7 +444,12 @@ function App() {
               style={{ marginLeft: '10px' }}
             />
             <button onClick={handleScrape} disabled={loading}>
-              {loading ? <div className="mini-spinner"></div> : "Extract"}
+              {loading ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className="mini-spinner"></div>
+                  <span>Scraping...</span>
+                </div>
+              ) : "Extract"}
             </button>
           </div>
 
@@ -434,6 +458,14 @@ function App() {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               {/* Messages */}
               <div className="messages">
+                {loading && (
+                  <div className="loading-overlay">
+                    <div className="spinner-container">
+                      <div className="large-spinner"></div>
+                      <p>{loadingMessage}</p>
+                    </div>
+                  </div>
+                )}
                 {messages.length === 0 && !loading && (
                    <div style={{ margin: "auto", color: "#64748b", textAlign: "center", maxWidth: '300px' }}>
                      <Globe size={48} style={{ marginBottom: '15px', opacity: 0.2 }} />
@@ -445,7 +477,15 @@ function App() {
                     key={index}
                     className={msg.type === "user" ? "user-msg" : "bot-msg"}
                   >
-                    {msg.text}
+                    <div className="msg-text">{msg.text}</div>
+                    {msg.type === "bot" && msg.url && (
+                      <div className="msg-source">
+                        <span className="source-label">Source:</span>
+                        <a href={msg.url} target="_blank" rel="noopener noreferrer" className="source-link">
+                          {msg.title || msg.url}
+                        </a>
+                      </div>
+                    )}
                   </div>
                 ))}
                 {chatLoading && (
@@ -479,8 +519,9 @@ function App() {
             {/* Extracted Knowledge Sidebar */}
             {chunks.length > 0 && (
               <div className="extracted-sidebar">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '20px' }}>
                   <h3 style={{ fontSize: '1rem', margin: 0, color: '#e2e8f0', fontWeight: '700' }}>Extracted Knowledge</h3>
+                  {pageTitle && <p className="extracted-page-title" title={pageTitle}>{pageTitle}</p>}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {chunks.map((p, i) => {

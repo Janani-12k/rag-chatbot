@@ -31,8 +31,8 @@ app.add_middleware(
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY)
 
-# Store Chunks (GLOBAL) - mapping URL to list of paragraphs
-url_chunks_cache = {}
+# Store Chunks (GLOBAL) - mapping URL to metadata and chunks
+url_data_cache = {}
 
 class ScrapeRequest(BaseModel):
     url: str
@@ -137,10 +137,11 @@ async def scrape(req: ScrapeRequest):
 
     try:
         # Check cache first
-        if url in url_chunks_cache:
+        if url in url_data_cache:
             print(f"DEBUG: Serving {url} from cache")
             return {
-                "paragraphs": url_chunks_cache[url]
+                "paragraphs": url_data_cache[url]["chunks"],
+                "title": url_data_cache[url]["title"]
             }
 
         print(f"DEBUG: Scraping {url}...")
@@ -160,6 +161,10 @@ async def scrape(req: ScrapeRequest):
             return {"error": "Could not retrieve any content from this URL."}
 
         soup = BeautifulSoup(response.text, "html.parser")
+
+        # Extract Title
+        page_title = soup.title.string if soup.title else "Unknown Website"
+        page_title = clean_text(page_title)
 
         # Check if body exists
         if not soup.body:
@@ -200,11 +205,15 @@ async def scrape(req: ScrapeRequest):
         print(f"DEBUG: Extracted {len(paragraphs)} chunks from {url}")
         
         # Keep semantic paragraphs for AI (global store)
-        url_chunks_cache[url] = paragraphs
+        url_data_cache[url] = {
+            "chunks": paragraphs,
+            "title": page_title
+        }
 
         # Return paragraphs for a more natural UI display
         return {
-            "paragraphs": paragraphs
+            "paragraphs": paragraphs,
+            "title": page_title
         }
 
     except Exception as e:
@@ -216,11 +225,14 @@ async def ask(req: QuestionRequest):
     url = req.url
     question = req.question
     
-    # Retrieve chunks for this specific URL
-    stored_chunks = url_chunks_cache.get(url)
+    # Retrieve data for this specific URL
+    cached_data = url_data_cache.get(url)
     
-    if not stored_chunks:
+    if not cached_data:
         return {"error": "No context available for this URL. Please scrape it first."}
+
+    stored_chunks = cached_data["chunks"]
+    page_title = cached_data["title"]
 
     try:
         # Get top relevant chunks
@@ -229,22 +241,27 @@ async def ask(req: QuestionRequest):
         # Combine relevant paragraphs for full context
         context = "\n".join(relevant_chunks)
         
-        # Use Groq for the chat completion
+        # Use Groq for the chat completion with a better prompt
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant. Answer the user's question based ONLY on the provided context. You must respond in valid JSON format with two keys: 'answer' (your concise answer) and 'exact_quote' (the exact verbatim substring from the context that contains the answer. If you cannot find an exact quote, return an empty string)."
+                    "content": f"You are WebScraperX, an advanced AI Website Knowledge Assistant. Your goal is to provide rich, detailed, and natural-sounding answers based ONLY on the provided context from the website '{page_title}'. \n\n"
+                               "Guidelines:\n"
+                               "- If the information is available, provide a comprehensive explanation (2-4 sentences).\n"
+                               "- Use a professional and helpful tone.\n"
+                               "- Do not mention 'the context' or 'the provided text' in your answer.\n"
+                               "- You must respond in valid JSON format with two keys: 'answer' (your rich answer) and 'exact_quote' (the exact verbatim substring from the context that contains the key information)."
                 },
                 {
                     "role": "user",
-                    "content": f"Context:\n{context}\n\nQuestion: {question}"
+                    "content": f"Context from {page_title}:\n{context}\n\nQuestion: {question}"
                 }
             ],
             response_format={"type": "json_object"},
-            temperature=0.1,
-            max_tokens=500,
+            temperature=0.3, # Slightly higher temperature for more natural flow
+            max_tokens=800,
         )
         
         import json
@@ -252,9 +269,15 @@ async def ask(req: QuestionRequest):
         answer = response_data.get("answer", "I don't know based on the website content.")
         exact_quote = response_data.get("exact_quote", "")
         
-        return {"answer": answer, "sources": relevant_chunks, "exact_quote": exact_quote}
+        return {
+            "answer": answer, 
+            "sources": relevant_chunks, 
+            "exact_quote": exact_quote,
+            "title": page_title
+        }
         
     except Exception as e:
+        print(f"DEBUG: Ask error: {e}")
         return {"error": str(e)}
 
 if __name__ == "__main__":
