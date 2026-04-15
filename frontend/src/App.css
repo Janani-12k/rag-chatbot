@@ -376,56 +376,57 @@ body, html {
 }
 
 .extracted-chunk {
-  padding: 16px 18px;
-  background: #273549;
-  border-radius: 10px;
-  border: 1px solid #3d4b61;
-  font-size: 0.875rem;
-  line-height: 1.8;
-  color: #e2e8f0;
-  transition: all 0.2s ease-in-out;
-  display: flex; /* Use flexbox for perfect alignment */
+  padding: 20px;
+  background: #1e293b; /* Slightly darker background for better text contrast */
+  border-radius: 12px;
+  border: 1px solid #334155;
+  font-size: 0.95rem; /* Slightly larger text */
+  line-height: 1.7;
+  color: #f1f5f9; /* Sharper text color */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
   align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  gap: 16px; /* More gap between index and text */
+  margin-bottom: 20px; /* More margin between cards */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   word-wrap: break-word;
   overflow-wrap: break-word;
-  text-align: left;
+  text-align: justify; /* Justify text for a "proper" look */
 }
 
 .extracted-chunk:hover {
-  border-color: #60a5fa;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-  background: #2d3b53;
+  border-color: #3b82f6;
+  background: #243146;
+  transform: scale(1.02); /* Subtle scale effect */
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
 }
 
 .chunk-index {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 24px;
-  height: 24px;
+  min-width: 28px;
+  height: 28px;
   background: #3b82f6;
   color: white;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
-  flex-shrink: 0; /* Don't allow index to shrink */
-  margin-top: 2px; /* Slight adjustment to align with first line of text */
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .chunk-text {
-  flex: 1; /* Take up remaining space */
+  flex: 1;
+  letter-spacing: 0.01em;
 }
 
 .extracted-chunk.highlighted-chunk {
-  background: #2d3b53;
+  background: #243146;
   border-color: #60a5fa;
   border-width: 2px;
-  box-shadow: 0 0 20px rgba(96, 165, 250, 0.2);
+  box-shadow: 0 0 25px rgba(96, 165, 250, 0.15);
 }
 
 .extracted-chunk.highlighted-chunk .chunk-index {

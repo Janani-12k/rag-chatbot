@@ -42,16 +42,19 @@ class QuestionRequest(BaseModel):
     question: str
 
 def clean_text(text: str) -> str:
-    # Remove multiple spaces, newlines, and tabs
-    text = re.sub(r'[\r\n\t]+', ' ', text)
-    text = re.sub(r'\s+', ' ', text)
+    if not text:
+        return ""
+    # Remove excessive newlines/tabs but keep single ones if they separate content
+    text = re.sub(r'[\t\r]+', ' ', text)
+    text = re.sub(r'\n\s*\n', '\n\n', text)
+    text = re.sub(r' +', ' ', text)
     return text.strip()
 
 def chunk_text(text: str, chunk_size: int = 500) -> list[str]:
     if not text:
         return []
     
-    # Pre-clean text
+    # Pre-clean text but keep it as blocks
     text = clean_text(text)
     
     chunks = []
@@ -65,24 +68,25 @@ def chunk_text(text: str, chunk_size: int = 500) -> list[str]:
         # If we are not at the end of the string, look for a sentence break
         if end < text_len:
             # Look for the last sentence-ending punctuation within the chunk
-            # Looking at a slightly wider range to find a good break point
-            search_range = text[max(start, end - 150):end + 50]
+            # Looking at a wider range to find a good break point
+            search_range = text[max(start, end - 200):end + 100]
             last_break = -1
-            for punct in ['. ', '! ', '? ', '\n']:
+            # Prioritize paragraph breaks, then sentence breaks
+            for punct in ['\n\n', '\n', '. ', '! ', '? ']:
                 idx = search_range.rfind(punct)
                 if idx > last_break:
                     last_break = idx
             
             if last_break != -1:
                 # Adjust 'end' to the punctuation + space
-                end = max(start, end - 150) + last_break + 1
+                end = max(start, end - 200) + last_break + len(punct.strip()) + 1
             else:
                 # Fallback to last space if no punctuation found
                 last_space = text.rfind(' ', start, end)
                 if last_space != -1 and last_space > start:
                     end = last_space
         
-        chunk = text[start:end].strip()
+        chunk = text[start:end].replace('\n', ' ').strip()
         if len(chunk) > 30: # Only add substantial chunks
             chunks.append(chunk)
         
