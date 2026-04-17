@@ -9,14 +9,6 @@ import urllib3
 import os
 from groq import Groq
 from dotenv import load_dotenv
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
-from webdriver_manager.chrome import ChromeDriverManager
-import time
 
 # Load environment variables
 load_dotenv()
@@ -137,62 +129,6 @@ def get_relevant_chunks(question: str, chunks: list[str], top_k: int = 5) -> lis
         return chunks[:top_k]
     return results[:top_k]
 
-def get_selenium_content(url: str) -> str:
-    """Fallback scraper using Selenium Headless Chrome"""
-    print(f"DEBUG: Attempting Selenium Fallback for {url}")
-    
-    chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920,1080")
-    # Anti-detection
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option("useAutomationExtension", False)
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-
-    driver = None
-    try:
-        # Check if running on Render (Render has chrome binary at specific location)
-        # For Render, we often need to specify the binary location if not in path
-        chrome_bin = os.getenv("CHROME_BINARY_PATH")
-        if chrome_bin:
-            chrome_options.binary_location = chrome_bin
-            
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        
-        # Additional anti-detection: execute CDP command to hide automation
-        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-            "source": """
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
-                })
-            """
-        })
-        
-        driver.get(url)
-        
-        # Wait for body to be present (max 20 seconds)
-        WebDriverWait(driver, 20).until(
-            EC.presence_of_element_located((By.TAG_NAME, "body"))
-        )
-        
-        # Extra wait for dynamic content
-        time.sleep(3) 
-        
-        html = driver.page_source
-        print(f"DEBUG: Selenium successfully extracted {len(html)} bytes")
-        return html
-    except Exception as e:
-        print(f"DEBUG: Selenium fallback failed: {e}")
-        return ""
-    finally:
-        if driver:
-            driver.quit()
-
 @app.get("/")
 async def home():
     return {"message": "Backend is running with Groq AI"}
@@ -252,22 +188,16 @@ async def scrape(req: ScrapeRequest):
                 response = requests.get(target_url, timeout=30, verify=False, headers=headers)
             except Exception as req_e:
                 print(f"DEBUG: Standard requests fallback failed for {target_url}: {req_e}")
-                # Don't return yet, let it fall through to Selenium
                 response = None 
             
         if not response or response.status_code != 200 or not response.text or len(response.text.strip()) < 100:
-            # All normal scraping failed, trigger Selenium Fallback
-            selenium_html = get_selenium_content(url)
-            if selenium_html:
-                soup = BeautifulSoup(selenium_html, "html.parser")
-            else:
-                # If both fail, return original error or a clean message
-                error_msg = "All scraping attempts failed. This website might have very strict bot protection."
-                if not response:
-                    error_msg += " (No response received)"
-                elif response.status_code != 200:
-                    error_msg += f" (Status code: {response.status_code})"
-                return {"error": error_msg}
+            # All normal scraping failed
+            error_msg = "All scraping attempts failed. This website might have very strict bot protection."
+            if not response:
+                error_msg += " (No response received)"
+            elif response.status_code != 200:
+                error_msg += f" (Status code: {response.status_code})"
+            return {"error": error_msg}
         else:
             soup = BeautifulSoup(response.text, "html.parser")
 

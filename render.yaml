@@ -2,7 +2,7 @@ services:
   - type: web
     name: rag-chatbot-backend
     env: python
-    buildCommand: pip install -r backend/requirements.txt && apt-get update && apt-get install -y google-chrome-stable
+    buildCommand: pip install -r backend/requirements.txt
     startCommand: gunicorn --chdir backend -w 1 -k uvicorn.workers.UvicornWorker app:app
     envVars:
       - key: PYTHON_VERSION
