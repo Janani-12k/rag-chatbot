@@ -213,58 +213,68 @@ async def scrape(req: ScrapeRequest):
         for noise in soup(["script", "style", "nav", "footer", "header", "aside", "form", "button", "svg", "path", "iframe"]):
             noise.decompose()
 
-        # Extract content from natural block-level elements
+        # Extract content from natural block-level elements with hierarchy awareness
         raw_blocks = []
-        for tag in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'article', 'section', 'div', 'span']):
+        # Find all meaningful content tags
+        for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li', 'article', 'section', 'div']):
+            # Skip tags that are just wrappers for other tags we'll process
+            if tag.name == 'div' and tag.find(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li']):
+                continue
+                
             text = clean_text(tag.get_text(strip=True))
-            # Lowered threshold and added length limit to avoid massive chunks
-            if 30 < len(text) < 2000: 
-                raw_blocks.append(text)
+            # Heuristic: Ignore very short or navigation-like text
+            if len(text) > 40:
+                # Store with tag name to help grouping later
+                raw_blocks.append({"tag": tag.name, "text": text})
         
         # Fallback if no specific tags found
         if not raw_blocks:
             print("DEBUG: No semantic tags found, falling back to body text")
             text = clean_text(soup.body.get_text(separator=' '))
-            raw_blocks = [text[i:i+500] for i in range(0, len(text), 500)]
+            raw_blocks = [{"tag": "p", "text": text[i:i+500]} for i in range(0, len(text), 500)]
 
         # Deduplicate while preserving order
         unique_raw = []
         seen = set()
         for b in raw_blocks:
-            if b.lower() not in seen:
+            if b["text"].lower() not in seen:
                 unique_raw.append(b)
-                seen.add(b.lower())
+                seen.add(b["text"].lower())
 
-        # Professional Grouping Logic: Merge small consecutive blocks
-        # This keeps headings with their paragraphs and lists together in one card.
+        # Professional Grouping Logic: Merge small consecutive blocks semantically
         professional_chunks = []
         current_group = ""
         
         for block in unique_raw:
-            # If current group is empty, start it
+            text = block["text"]
+            tag = block["tag"]
+            
+            # If it's a heading, start a new group or merge if current is small
+            is_heading = tag.startswith('h')
+            
             if not current_group:
-                current_group = block
-            # If adding this block doesn't exceed a reasonable card size (700 chars), merge it
-            elif len(current_group) + len(block) < 700:
-                current_group += "\n\n" + block
-            # Otherwise, save the current group and start a new one
-            else:
-                # If the group is long enough, split it properly at sentence boundaries
-                if len(current_group) > 800:
-                    professional_chunks.extend(chunk_text(current_group, chunk_size=600))
-                else:
+                current_group = text
+            elif is_heading:
+                # Headings usually start a new section
+                if len(current_group) > 200:
                     professional_chunks.append(current_group)
-                current_group = block
+                    current_group = text
+                else:
+                    current_group += "\n\n" + text
+            elif len(current_group) + len(text) < 1000:
+                # Merge if it doesn't make the chunk too large
+                current_group += "\n\n" + text
+            else:
+                # Current group is full
+                professional_chunks.append(current_group)
+                current_group = text
         
         # Add the last group
         if current_group:
-            if len(current_group) > 800:
-                professional_chunks.extend(chunk_text(current_group, chunk_size=600))
-            else:
-                professional_chunks.append(current_group)
+            professional_chunks.append(current_group)
 
-        # Final cleanup and limit to top 25 high-quality chunks
-        paragraphs = [p.replace('\n\n', ' ') for p in professional_chunks if len(p) > 60][:25]
+        # Final cleanup and filter out any leftover junk
+        paragraphs = [p.strip() for p in professional_chunks if len(p) > 80][:30]
         
         print(f"DEBUG: Extracted {len(paragraphs)} high-quality professional chunks from {url}")
         

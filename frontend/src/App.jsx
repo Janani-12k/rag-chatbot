@@ -158,10 +158,8 @@ function App() {
     setHighlightedChunks([]);
     setExactQuote("");
     try {
-      // Use localhost for testing if on development
-      const API_BASE = window.location.hostname === "localhost" 
-        ? "http://localhost:5000" 
-        : "https://rag-chatbot-ep72.onrender.com";
+      // Using the production Render URL as the default backend for testing
+      const API_BASE = "https://rag-chatbot-ep72.onrender.com";
 
       console.log(`DEBUG: Scraping ${url} using ${API_BASE}`);
       
@@ -208,9 +206,7 @@ function App() {
     setChatLoading(true);
 
     try {
-      const API_BASE = window.location.hostname === "localhost" 
-        ? "http://localhost:5000" 
-        : "https://rag-chatbot-ep72.onrender.com";
+      const API_BASE = "https://rag-chatbot-ep72.onrender.com";
 
       const res = await fetch(`${API_BASE}/ask`, {
         method: "POST",
@@ -289,9 +285,7 @@ function App() {
       setHistoryLoading(true);
       // Re-fetch the content silently in the background
       try {
-        const API_BASE = window.location.hostname === "localhost" 
-          ? "http://localhost:5000" 
-          : "https://rag-chatbot-ep72.onrender.com";
+        const API_BASE = "https://rag-chatbot-ep72.onrender.com";
 
         const res = await fetch(`${API_BASE}/scrape`, { 
           method: "POST", 
