@@ -2,13 +2,21 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import requests
-import cloudscraper
+from curl_cffi import requests as curl_requests
 from bs4 import BeautifulSoup
 import re
 import urllib3
 import os
 from groq import Groq
 from dotenv import load_dotenv
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from webdriver_manager.chrome import ChromeDriverManager
+import time
 
 # Load environment variables
 load_dotenv()
@@ -129,6 +137,62 @@ def get_relevant_chunks(question: str, chunks: list[str], top_k: int = 5) -> lis
         return chunks[:top_k]
     return results[:top_k]
 
+def get_selenium_content(url: str) -> str:
+    """Fallback scraper using Selenium Headless Chrome"""
+    print(f"DEBUG: Attempting Selenium Fallback for {url}")
+    
+    chrome_options = Options()
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
+    # Anti-detection
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option("useAutomationExtension", False)
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+
+    driver = None
+    try:
+        # Check if running on Render (Render has chrome binary at specific location)
+        # For Render, we often need to specify the binary location if not in path
+        chrome_bin = os.getenv("CHROME_BINARY_PATH")
+        if chrome_bin:
+            chrome_options.binary_location = chrome_bin
+            
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        # Additional anti-detection: execute CDP command to hide automation
+        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+            "source": """
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                })
+            """
+        })
+        
+        driver.get(url)
+        
+        # Wait for body to be present (max 20 seconds)
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+        
+        # Extra wait for dynamic content
+        time.sleep(3) 
+        
+        html = driver.page_source
+        print(f"DEBUG: Selenium successfully extracted {len(html)} bytes")
+        return html
+    except Exception as e:
+        print(f"DEBUG: Selenium fallback failed: {e}")
+        return ""
+    finally:
+        if driver:
+            driver.quit()
+
 @app.get("/")
 async def home():
     return {"message": "Backend is running with Groq AI"}
@@ -150,42 +214,62 @@ async def scrape(req: ScrapeRequest):
 
         print(f"DEBUG: Scraping {url}...")
         
-        # Using cloudscraper to bypass bot protection
-        scraper = cloudscraper.create_scraper(
-            browser={
-                'browser': 'chrome',
-                'platform': 'windows',
-                'desktop': True
-            }
-        )
-        
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1'
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
         }
 
+        response = None
         try:
-            response = scraper.get(url, timeout=15, headers=headers)
+            # Using curl_cffi to bypass bot protection - Profile 1
+            print(f"DEBUG: Attempting curl_cffi (Chrome 120) for {url}")
+            response = curl_requests.get(url, impersonate="chrome120", timeout=30)
         except Exception as e:
-            print(f"DEBUG: Cloudscraper failed, trying standard requests: {e}")
-            # Add protocol if missing
-            if not url.startswith(('http://', 'https://')):
-                url = 'https://' + url
-            try:
-                response = requests.get(url, timeout=15, verify=False, headers=headers)
-            except Exception as req_e:
-                print(f"DEBUG: Standard requests also failed: {req_e}")
-                return {"error": f"Failed to connect to the website: {str(req_e)}"}
+            print(f"DEBUG: curl_cffi Profile 1 failed: {e}")
             
-        if not response or not response.text or response.status_code != 200:
-            status = response.status_code if response else "No Response"
-            return {"error": f"Could not retrieve content. Website returned status: {status}. Some sites block automated access."}
+        if not response or response.status_code != 200:
+            try:
+                # Retry with Profile 2
+                print(f"DEBUG: Retrying curl_cffi (Edge 101) for {url}")
+                response = curl_requests.get(url, impersonate="edge101", timeout=30)
+            except Exception as e:
+                print(f"DEBUG: curl_cffi Profile 2 failed: {e}")
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        if not response or response.status_code != 200:
+            # Final fallback to standard requests
+            target_url = url if url.startswith(('http://', 'https://')) else 'https://' + url
+            try:
+                print(f"DEBUG: Final fallback to standard requests for {target_url}")
+                response = requests.get(target_url, timeout=30, verify=False, headers=headers)
+            except Exception as req_e:
+                print(f"DEBUG: Standard requests fallback failed for {target_url}: {req_e}")
+                # Don't return yet, let it fall through to Selenium
+                response = None 
+            
+        if not response or response.status_code != 200 or not response.text or len(response.text.strip()) < 100:
+            # All normal scraping failed, trigger Selenium Fallback
+            selenium_html = get_selenium_content(url)
+            if selenium_html:
+                soup = BeautifulSoup(selenium_html, "html.parser")
+            else:
+                # If both fail, return original error or a clean message
+                error_msg = "All scraping attempts failed. This website might have very strict bot protection."
+                if not response:
+                    error_msg += " (No response received)"
+                elif response.status_code != 200:
+                    error_msg += f" (Status code: {response.status_code})"
+                return {"error": error_msg}
+        else:
+            soup = BeautifulSoup(response.text, "html.parser")
 
         # Extract Title
         page_title = soup.title.string if soup.title else "Unknown Website"
@@ -201,11 +285,18 @@ async def scrape(req: ScrapeRequest):
 
         # Extract content from natural block-level elements
         raw_blocks = []
-        for tag in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'article', 'section']):
+        for tag in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'article', 'section', 'div', 'span']):
             text = clean_text(tag.get_text(strip=True))
-            if len(text) > 50: # Increased minimum threshold to filter out noise
+            # Lowered threshold and added length limit to avoid massive chunks
+            if 30 < len(text) < 2000: 
                 raw_blocks.append(text)
         
+        # Fallback if no specific tags found
+        if not raw_blocks:
+            print("DEBUG: No semantic tags found, falling back to body text")
+            text = clean_text(soup.body.get_text(separator=' '))
+            raw_blocks = [text[i:i+500] for i in range(0, len(text), 500)]
+
         # Deduplicate while preserving order
         unique_raw = []
         seen = set()

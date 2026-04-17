@@ -1,9 +1,12 @@
 fastapi 
 uvicorn 
+gunicorn
 requests 
-cloudscraper 
+curl_cffi 
 beautifulsoup4 
 python-dotenv 
 groq 
 pydantic 
 urllib3 
+selenium
+webdriver-manager

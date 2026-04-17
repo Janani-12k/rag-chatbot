@@ -158,12 +158,26 @@ function App() {
     setHighlightedChunks([]);
     setExactQuote("");
     try {
-      const res = await fetch("https://webscraperx-backend.onrender.com/scrape", { 
+      // Use localhost for testing if on development
+      const API_BASE = window.location.hostname === "localhost" 
+        ? "http://localhost:5000" 
+        : "https://rag-chatbot-ep72.onrender.com";
+
+      console.log(`DEBUG: Scraping ${url} using ${API_BASE}`);
+      
+      const res = await fetch(`${API_BASE}/scrape`, { 
         method: "POST", 
         headers: { "Content-Type": "application/json" }, 
         body: JSON.stringify({ url }), 
       }); 
+      
+      if (!res.ok) {
+        throw new Error(`Server returned ${res.status}: ${res.statusText}`);
+      }
+
       const data = await res.json(); 
+      console.log("DEBUG: Received data:", data);
+
       if (data.paragraphs && data.paragraphs.length > 0) {
         setChunks(data.paragraphs);
         setPageTitle(data.title || "Extracted Content");
@@ -172,9 +186,13 @@ function App() {
         setMessages([{ type: "bot", text: "I couldn't find much text on this page. Try a different URL or one with more content." }]);
       } else if (data.error) {
         setMessages([{ type: "bot", text: "Error: " + data.error }]);
+      } else {
+        setMessages([{ type: "bot", text: "Received an unexpected response from the server." }]);
       }
     } catch (err) {
-      showToast("Error connecting to server.");
+      console.error("DEBUG: Scrape error:", err);
+      showToast(`Connection error: ${err.message}`);
+      setMessages([{ type: "bot", text: "Failed to connect to the backend server. Make sure it's running." }]);
     } finally {
       setLoading(false);
     }
@@ -190,7 +208,11 @@ function App() {
     setChatLoading(true);
 
     try {
-      const res = await fetch("https://webscraperx-backend.onrender.com/ask", {
+      const API_BASE = window.location.hostname === "localhost" 
+        ? "http://localhost:5000" 
+        : "https://rag-chatbot-ep72.onrender.com";
+
+      const res = await fetch(`${API_BASE}/ask`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -198,6 +220,11 @@ function App() {
           question: userQ 
         }),
       });
+      
+      if (!res.ok) {
+        throw new Error(`Server returned ${res.status}: ${res.statusText}`);
+      }
+
       const data = await res.json();
 
       if (data.answer) {
@@ -262,11 +289,20 @@ function App() {
       setHistoryLoading(true);
       // Re-fetch the content silently in the background
       try {
-        const res = await fetch("https://webscraperx-backend.onrender.com/scrape", { 
+        const API_BASE = window.location.hostname === "localhost" 
+          ? "http://localhost:5000" 
+          : "https://rag-chatbot-ep72.onrender.com";
+
+        const res = await fetch(`${API_BASE}/scrape`, { 
           method: "POST", 
           headers: { "Content-Type": "application/json" }, 
           body: JSON.stringify({ url: chat.url }), 
         }); 
+        
+        if (!res.ok) {
+          throw new Error(`Server returned ${res.status}: ${res.statusText}`);
+        }
+
         const data = await res.json(); 
         if (data.paragraphs) {
           setChunks(data.paragraphs);
