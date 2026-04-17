@@ -216,30 +216,27 @@ async def scrape(req: ScrapeRequest):
         # Extract content from natural block-level elements with hierarchy awareness
         raw_blocks = []
         # Find all meaningful content tags
-        for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li', 'article', 'section', 'div']):
-            # Skip tags that are just wrappers for other tags we'll process
-            if tag.name == 'div' and tag.find(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li']):
-                continue
-                
-            text = clean_text(tag.get_text(strip=True))
+        # Using a set of tags that usually contain actual content
+        content_tags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li', 'article', 'section']
+        
+        for tag in soup.find_all(content_tags):
+            # Use separator=' ' to prevent words from being joined (e.g., "What we doThe Work")
+            text = clean_text(tag.get_text(separator=' ', strip=True))
+            
             # Heuristic: Ignore very short or navigation-like text
             if len(text) > 40:
                 # Store with tag name to help grouping later
                 raw_blocks.append({"tag": tag.name, "text": text})
         
-        # Fallback if no specific tags found
-        if not raw_blocks:
-            print("DEBUG: No semantic tags found, falling back to body text")
-            text = clean_text(soup.body.get_text(separator=' '))
-            raw_blocks = [{"tag": "p", "text": text[i:i+500]} for i in range(0, len(text), 500)]
-
-        # Deduplicate while preserving order
+        # Deduplicate while preserving order and handle exact duplicates that often appear in headers/footers
         unique_raw = []
         seen = set()
         for b in raw_blocks:
-            if b["text"].lower() not in seen:
+            # Normalize for comparison
+            normalized = re.sub(r'\s+', '', b["text"].lower())
+            if normalized not in seen:
                 unique_raw.append(b)
-                seen.add(b["text"].lower())
+                seen.add(normalized)
 
         # Professional Grouping Logic: Merge small consecutive blocks semantically
         professional_chunks = []
@@ -249,20 +246,20 @@ async def scrape(req: ScrapeRequest):
             text = block["text"]
             tag = block["tag"]
             
-            # If it's a heading, start a new group or merge if current is small
+            # If it's a heading, it should start a new card unless the current card is very empty
             is_heading = tag.startswith('h')
             
             if not current_group:
                 current_group = text
             elif is_heading:
-                # Headings usually start a new section
-                if len(current_group) > 200:
+                # Always start a new section for headings if the previous one has some content
+                if len(current_group) > 100:
                     professional_chunks.append(current_group)
                     current_group = text
                 else:
                     current_group += "\n\n" + text
-            elif len(current_group) + len(text) < 1000:
-                # Merge if it doesn't make the chunk too large
+            elif len(current_group) + len(text) < 1200:
+                # Merge if it doesn't make the chunk too large, adding double newline for clarity
                 current_group += "\n\n" + text
             else:
                 # Current group is full
@@ -273,8 +270,8 @@ async def scrape(req: ScrapeRequest):
         if current_group:
             professional_chunks.append(current_group)
 
-        # Final cleanup and filter out any leftover junk
-        paragraphs = [p.strip() for p in professional_chunks if len(p) > 80][:30]
+        # Final cleanup: limit to top high-quality chunks
+        paragraphs = [p.strip() for p in professional_chunks if len(p) > 100][:30]
         
         print(f"DEBUG: Extracted {len(paragraphs)} high-quality professional chunks from {url}")
         
